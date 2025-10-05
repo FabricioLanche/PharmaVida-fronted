@@ -1,10 +1,13 @@
-import { Link } from 'react-router-dom'
+import React from 'react';
 
-export default function Product_Search() {
-	return (
-		<div>
-			<h1>Product Search</h1>
-			<Link to="/">Back to Home</Link>
-		</div>
-	)
-}
+const Product_Search: React.FC = () => {
+  return (
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Búsqueda de Productos</h1>
+      <p>Funcionalidad de búsqueda de productos en construcción.</p>
+      {/* El contenido original de búsqueda de productos se restaurará aquí si es necesario. */}
+    </div>
+  );
+};
+
+export default Product_Search;

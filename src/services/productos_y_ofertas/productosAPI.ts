@@ -1,11 +1,10 @@
-import { API, apiGet, apiPost } from '../apiConfig'
+import { apiGet } from "../apiConfig";
+import { Producto } from "../../types/productos";
 
-const base = API.productosOfertas
+const PRODUCTOS_API_URL = import.meta.env.VITE_API_PRODUCTOS_OFERTAS;
 
-export function fetchProductos() {
-  return apiGet(`${base}/productos`)
-}
-
-export function createProducto(payload: any) {
-  return apiPost(`${base}/productos`, payload)
+export async function searchProducts(query: string): Promise<Producto[]> {
+    // Lógica de búsqueda original
+    console.log("Buscando productos con:", query);
+    return []; 
 }

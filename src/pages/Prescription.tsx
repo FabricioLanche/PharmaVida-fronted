@@ -1,116 +1,326 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { uploadPrescription } from '../services/recetas_y_medicos/recetasAPI';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { type Producto } from '../types/productos';
+import { uploadPrescription, validatePrescription } from '../services/recetas_y_medicos/recetasAPI';
+import { useAuth } from '../hooks/authContext';
 
-export default function Prescription() {
-  const [pacienteDNI, setPacienteDNI] = useState('');
-  const [medicoCMP, setMedicoCMP] = useState('');
-  const [fechaEmision, setFechaEmision] = useState('');
-  const [productos, setProductos] = useState([{ codigoProducto: '', nombre: '', cantidad: 1 }]);
-  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
-  const [consent, setConsent] = useState(false);
+// Define CartItem locally as it's not exported from Product_Search
+interface CartItem extends Producto {
+  quantity: number;
+}
+
+// Define a type for items in the cart that are associated with a prescription
+interface PrescriptionItem extends Pick<Producto, 'id' | 'nombre' | 'precio' | 'requiere_receta'> {
+  cantidad: number;
+}
+
+// Define the structure for a prescription entry in the UI state
+interface RecetaForm {
+  id?: string | number;
+  archivoPDF: File | null;
+  fechaEmision: string;
+  medicoCMP: string;
+  productos: PrescriptionItem[];
+  status?: 'pending' | 'validated' | 'rejected';
+  validationMessage?: string;
+}
+
+// Types for API responses are handled in recetasAPI
+
+const Prescription: React.FC = () => {
+  const [productosReceta, setProductosReceta] = useState<CartItem[]>([]);
+  const [recetas, setRecetas] = useState<RecetaForm[]>([]);
+  const [currentReceta, setCurrentReceta] = useState<RecetaForm>({
+    archivoPDF: null,
+    fechaEmision: '',
+    medicoCMP: '',
+    productos: [],
+  });
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [message, setMessage] = useState('');
+  const { user, isLoading } = useAuth();
+  const navigate = useNavigate();
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files.length > 0) {
-      setPrescriptionFile(event.target.files[0]);
+  useEffect(() => {
+    const storedCart = localStorage.getItem('carrito');
+    if (storedCart) {
+      const carrito: CartItem[] = JSON.parse(storedCart);
+      setProductosReceta(carrito.filter(p => Boolean(p.requiere_receta)));
     }
+  }, []);
+
+  const handleProductSelection = (id: string) => {
+    setSelectedProductIds(prev =>
+      prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]
+    );
   };
 
-  const handleProductChange = (index: number, field: string, value: string | number) => {
-    const newProductos = [...productos];
-    newProductos[index] = { ...newProductos[index], [field]: value };
-    setProductos(newProductos);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setCurrentReceta({
+      ...currentReceta,
+      [e.target.name]: e.target.value,
+    });
   };
 
-  const addProduct = () => {
-    setProductos([...productos, { codigoProducto: '', nombre: '', cantidad: 1 }]);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCurrentReceta({
+      ...currentReceta,
+      archivoPDF: e.target.files ? e.target.files[0] : null,
+    });
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setMessage('');
-
-    if (!pacienteDNI || !medicoCMP || !fechaEmision || !prescriptionFile || !consent) {
-      setMessage('Por favor, complete todos los campos, adjunte un archivo y acepte los términos.');
+  const handleAddReceta = () => {
+    if (
+      !currentReceta.archivoPDF ||
+      !currentReceta.fechaEmision ||
+      !currentReceta.medicoCMP ||
+      selectedProductIds.length === 0
+    ) {
+      setMessage('Completa todos los campos y selecciona productos.');
       return;
     }
 
-    try {
-      const formData = new FormData();
-      formData.append('pacienteDNI', pacienteDNI);
-      formData.append('medicoCMP', medicoCMP);
-      formData.append('fechaEmision', fechaEmision);
-      formData.append('productos', JSON.stringify(productos));
-      formData.append('archivoPDF', prescriptionFile);
+    const productosSeleccionados: PrescriptionItem[] = productosReceta
+      .filter(p => selectedProductIds.includes(String(p.id)))
+      .map(p => ({
+        id: p.id,
+        nombre: p.nombre,
+        cantidad: p.quantity || 1,
+        precio: p.precio,
+        requiere_receta: p.requiere_receta,
+      }));
 
-      await uploadPrescription(formData);
-      setMessage('Receta subida exitosamente!');
-      setPacienteDNI('');
-      setMedicoCMP('');
-      setFechaEmision('');
-      setProductos([{ codigoProducto: '', nombre: '', cantidad: 1 }]);
-      setPrescriptionFile(null);
-      setConsent(false);
-      (event.target as HTMLFormElement).reset();
+    setRecetas([
+      ...recetas,
+      {
+        ...currentReceta,
+        productos: productosSeleccionados,
+        status: 'pending',
+        validationMessage: '',
+      },
+    ]);
+
+    setProductosReceta(prev =>
+      prev.filter(p => !selectedProductIds.includes(String(p.id)))
+    );
+
+    setCurrentReceta({
+      archivoPDF: null,
+      fechaEmision: '',
+      medicoCMP: '',
+      productos: [],
+    });
+    setSelectedProductIds([]);
+    setMessage('');
+  };
+
+  // Subir todas las recetas y verificar estado
+  const handleSubmit = async () => {
+    if (isLoading) return;
+
+    if (!user) {
+      alert('Debes iniciar sesión para subir recetas.');
+      navigate('/login');
+      return;
+    }
+
+    // No permitir continuar si alguna receta está rechazada
+    const allPrescriptionsValid = recetas.every(receta => receta.status !== 'rejected');
+    if (!allPrescriptionsValid) {
+      setMessage('Hay recetas rechazadas. Por favor, corrígelas o súbelas de nuevo.');
+      return;
+    }
+
+    setMessage('Subiendo recetas...');
+    try {
+      const uploadedRecetasInfo: RecetaForm[] = [];
+
+      for (let i = 0; i < recetas.length; i++) {
+        const receta = recetas[i];
+        const formData = new FormData();
+        if (receta.archivoPDF) {
+          formData.append('archivoPDF', receta.archivoPDF);
+        } else {
+          throw new Error(`Receta para ${receta.productos.map(p => p.nombre).join(', ')} no tiene archivo PDF.`);
+        }
+        formData.append('fechaEmision', receta.fechaEmision);
+        formData.append('medicoCMP', receta.medicoCMP);
+        const pacienteDNI = user?.dni?.toString() || localStorage.getItem('userDNI');
+        formData.append('pacienteDNI', pacienteDNI || '');
+        formData.append(
+          'productos',
+          JSON.stringify(
+            receta.productos.map((p: PrescriptionItem) => ({
+              id: p.id,
+              nombre: p.nombre,
+              cantidad: p.cantidad,
+            }))
+          )
+        );
+        // upload returns { mensaje, receta }
+        const uploadResult = await uploadPrescription(formData);
+        const uploaded = uploadResult.receta;
+        uploadedRecetasInfo.push({
+          ...receta,
+          id: uploaded._id,
+          status: uploaded.estadoValidacion === 'validada' ? 'validated' : uploaded.estadoValidacion === 'rechazada' ? 'rejected' : 'pending',
+          validationMessage: uploadResult.mensaje || '',
+        });
+      }
+      setRecetas(uploadedRecetasInfo);
+      setMessage('Recetas subidas. Validando...');
+
+      await checkPrescriptionStatuses(uploadedRecetasInfo);
+
     } catch (error: any) {
-      console.error('Error uploading prescription:', error);
-      let errorMessage = 'Error al subir la receta. Por favor, intente de nuevo.';
-      if (error.message) {
-        errorMessage = error.message;
-      }
-      if (errorMessage.includes('Failed to fetch')) {
-        errorMessage = 'Error de red. Asegúrese de que el backend esté en ejecución y accesible.';
-      }
-      setMessage(errorMessage);
+      console.error('Error submitting prescriptions:', error);
+      setMessage('Error al subir las recetas. Verifica los datos o intenta de nuevo.');
     }
   };
 
+  // Verificar estado de todas las recetas subidas
+  const checkPrescriptionStatuses = async (recetasToUpdate: RecetaForm[]) => {
+    const updatedRecetas = [...recetasToUpdate];
+    let allValidated = true;
+
+    for (let i = 0; i < updatedRecetas.length; i++) {
+      const receta = updatedRecetas[i];
+      if (receta.id) {
+        try {
+          const validateRes = await validatePrescription(String(receta.id));
+          const estado = validateRes.receta.estadoValidacion;
+          updatedRecetas[i] = {
+            ...receta,
+            status: estado === 'validada' ? 'validated' : estado === 'rechazada' ? 'rejected' : 'pending',
+            validationMessage: validateRes.mensaje,
+          };
+          if (estado === 'rechazada') {
+            allValidated = false;
+          }
+        } catch (error) {
+          console.error(`Error validating prescription ${receta.id}:`, error);
+          updatedRecetas[i] = {
+            ...receta,
+            status: 'rejected',
+            validationMessage: 'Error al validar la receta.',
+          };
+          allValidated = false;
+        }
+      }
+    }
+    setRecetas(updatedRecetas);
+
+    if (allValidated) {
+      setMessage('Todas las recetas han sido validadas. Puedes continuar con el pago.');
+      setTimeout(() => navigate('/cart/transaction'), 2000);
+    } else {
+      setMessage('Algunas recetas fueron rechazadas. Por favor, corrígelas o súbelas de nuevo.');
+    }
+  };
+
+  // Permitir reintentar la carga de una receta rechazada
+  function handleRetryUpload(index: number) {
+    setRecetas(prev =>
+      prev.map((r, i) =>
+        i === index ? { ...r, archivoPDF: null, status: undefined, validationMessage: undefined } : r
+      )
+    );
+  }
+
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: 'auto' }}>
-      <h1 style={{ textAlign: 'center', marginBottom: '30px', color: '#333' }}>Subir Receta Médica</h1>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px', border: '1px solid #ddd', padding: '25px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-        <div>
-          <label htmlFor="pacienteDNI" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>DNI del Paciente:</label>
-          <input type="text" id="pacienteDNI" value={pacienteDNI} onChange={(e) => setPacienteDNI(e.target.value)} required style={{ width: 'calc(100% - 20px)', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }} />
-        </div>
-        <div>
-          <label htmlFor="medicoCMP" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>CMP del Médico:</label>
-          <input type="text" id="medicoCMP" value={medicoCMP} onChange={(e) => setMedicoCMP(e.target.value)} required style={{ width: 'calc(100% - 20px)', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }} />
-        </div>
-        <div>
-          <label htmlFor="fechaEmision" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Fecha de Emisión:</label>
-          <input type="date" id="fechaEmision" value={fechaEmision} onChange={(e) => setFechaEmision(e.target.value)} required style={{ width: 'calc(100% - 20px)', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }} />
-        </div>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Productos:</label>
-          {productos.map((producto, index) => (
-            <div key={index} style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-              <input type="text" placeholder="Código" value={producto.codigoProducto} onChange={(e) => handleProductChange(index, 'codigoProducto', e.target.value)} required style={{ padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }} />
-              <input type="text" placeholder="Nombre" value={producto.nombre} onChange={(e) => handleProductChange(index, 'nombre', e.target.value)} required style={{ padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }} />
-              <input type="number" placeholder="Cantidad" value={producto.cantidad} onChange={(e) => handleProductChange(index, 'cantidad', parseInt(e.target.value, 10))} required style={{ padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }} />
+    <div>
+      <h2>Subir Receta Médica</h2>
+      {message && <p>{message}</p>}
+
+      {productosReceta.length === 0 && recetas.length === 0 ? (
+        <p>No hay productos que requieran receta en tu carrito.</p>
+      ) : (
+        <>
+          {productosReceta.length > 0 && (
+            <div>
+              <h4>Selecciona productos para esta receta:</h4>
+              <ul>
+                {productosReceta.map(producto => (
+                  <li key={producto.id}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={selectedProductIds.includes(String(producto.id))}
+                        onChange={() => handleProductSelection(String(producto.id))}
+                      />
+                      {producto.nombre} - S/.{producto.precio}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <input
+                type="text"
+                name="medicoCMP"
+                placeholder="Código CMP del médico"
+                value={currentReceta.medicoCMP}
+                onChange={handleChange}
+              />
+              <input
+                type="date"
+                name="fechaEmision"
+                value={currentReceta.fechaEmision}
+                onChange={handleChange}
+              />
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={handleFileChange}
+              />
+              <button onClick={handleAddReceta} disabled={selectedProductIds.length === 0 || isLoading}>
+                Agregar receta
+              </button>
             </div>
-          ))}
-          <button type="button" onClick={addProduct} style={{ padding: '8px 12px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Añadir Producto</button>
-        </div>
-        <div>
-          <label htmlFor="prescriptionFile" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Archivo de Receta (PDF):</label>
-          <input type="file" id="prescriptionFile" onChange={handleFileChange} accept="application/pdf" required style={{ width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#f9f9f9' }} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <input type="checkbox" id="consent" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
-          <label htmlFor="consent">Declaro que la receta es auténtica y válida.</label>
-        </div>
-        <button type="submit" disabled={!consent} style={{ padding: '12px 20px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold', opacity: consent ? 1 : 0.5 }}>
-          Subir Receta
-        </button>
-      </form>
-      {message && <p style={{ marginTop: '20px', textAlign: 'center', color: message.includes('exitosamente') ? 'green' : 'red' }}>{message}</p>}
-      <div style={{ marginTop: '40px', textAlign: 'center' }}>
-        <Link to="/prescription/1" style={{ marginRight: '15px', color: '#007bff', textDecoration: 'none' }}>Ver Detalles de Receta (ejemplo)</Link>
-        <br />
-        <Link to="/" style={{ color: '#007bff', textDecoration: 'none' }}>Volver al Inicio</Link>
-      </div>
+          )}
+
+          {recetas.length > 0 && (
+            <div>
+              <h4>Recetas agregadas:</h4>
+              <ul>
+                {recetas.map((receta, idx) => (
+                  <div key={receta.id || idx}>
+                    {receta.productos.map(p => p.nombre).join(', ')} | CMP: {receta.medicoCMP} | Fecha: {receta.fechaEmision}
+                    {receta.status && (
+                      <span style={{ marginLeft: '10px', color: receta.status === 'validated' ? 'green' : receta.status === 'rejected' ? 'red' : 'orange' }}>
+                        Status: {receta.status} {receta.validationMessage && `(${receta.validationMessage})`}
+                      </span>
+                    )}
+                    {receta.status === 'rejected' && (
+                      <div>
+                        <p style={{ color: 'red' }}>
+                          Receta rechazada: {receta.validationMessage || 'Motivo no especificado'}
+                        </p>
+                        <button onClick={() => handleRetryUpload(idx)}>
+                          Corregir y volver a subir
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </ul>
+              <button
+                onClick={handleSubmit}
+                disabled={
+                  recetas.length === 0 ||
+                  isLoading ||
+                  !user ||
+                  recetas.some(r => r.status === 'pending')
+                }
+              >
+                Subir todas las recetas y continuar
+              </button>
+            </div>
+          )}
+        </>
+      )}
+      <br />
+      <Link to="/cart">Volver al carrito</Link>
     </div>
   );
-}
+};
+
+export default Prescription;

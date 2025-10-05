@@ -18,6 +18,12 @@ export async function apiPost<T>(url: string, body: any, init?: RequestInit): Pr
   return res.json()
 }
 
+export async function apiPut<T>(url: string, body: any, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), ...init })
+  if (!res.ok) throw new Error(`PUT ${url} failed: ${res.status}`)
+  return res.json()
+}
+
 export async function apiPostFormData<T>(url: string, body: FormData, init?: RequestInit): Promise<T> {
   // When using FormData, the 'Content-Type' header should typically be omitted
   // as the browser will set it to 'multipart/form-data' with the correct boundary.

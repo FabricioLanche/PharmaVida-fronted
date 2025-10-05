@@ -16,6 +16,7 @@ const Purchase_Admin = lazy(() => import('./pages/Purchase_Admin'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
+const Order_Confirmation = lazy(() => import('./pages/Order_Confirmation'))
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/admin/shop" element={<Purchase_Admin />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/order-confirmation" element={<Order_Confirmation />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

@@ -1,50 +1,53 @@
 import React, { useEffect, useState } from "react";
-import { fetchAnalitica, fetchAnaliticaRaw } from "../services/analitica/analiticaAPI";
+import { fetchAnalitica } from "../services/analitica/analiticaAPI";
 
-type Fila = Record<string, string | number>;
+interface Fila {
+  [key: string]: string | number;
+}
 
-export default function AnalyticsDashboard() {
+export default function AnaliticaDashboard() {
   const [datos, setDatos] = useState<Fila[]>([]);
   const [status, setStatus] = useState("Conectando...");
   const [consultaActiva, setConsultaActiva] = useState("ventas");
   const [columnas, setColumnas] = useState<string[]>([]);
 
+  // 🔢 Estados para paginación
   const [paginaActual, setPaginaActual] = useState(1);
-  const filasPorPagina = 10;
+  const filasPorPagina = 10; // puedes ajustar este número (10, 20, etc.)
 
   const cargarDatos = async (endpoint: string) => {
     setStatus("Cargando datos...");
     setConsultaActiva(endpoint);
     setPaginaActual(1);
     try {
-      const ping = await fetchAnaliticaRaw("ping");
-      const pingMsg = (ping && (ping.message || ping.status || ping.msg)) ||
-        "Conectado correctamente con Flask y Athena ✅";
-      setStatus(String(pingMsg));
+      const ping = await fetchAnalitica("ping");
+      setStatus(ping.message || "Conectado correctamente con Flask y Athena ✅");
 
       const data = await fetchAnalitica(endpoint);
       if (Array.isArray(data) && data.length > 0) {
-        setColumnas(Object.keys(data[0] as Fila));
-        setDatos(data as Fila[]);
+        setColumnas(Object.keys(data[0]));
+        setDatos(data);
       } else {
         setColumnas([]);
         setDatos([]);
       }
-    } catch (error: any) {
-      setStatus(`Error al conectar con backend 😔`);
+    } catch (error) {
+      setStatus("Error al conectar con backend 😔");
       setColumnas([]);
       setDatos([]);
     }
   };
 
   useEffect(() => {
-    cargarDatos("ventas");
+    cargarDatos("ventas"); // consulta por defecto
   }, []);
 
-  const totalPaginas = Math.ceil(datos.length / filasPorPagina) || 1;
+  // 📄 Cálculo de páginas
+  const totalPaginas = Math.ceil(datos.length / filasPorPagina);
   const indiceInicio = (paginaActual - 1) * filasPorPagina;
   const datosPagina = datos.slice(indiceInicio, indiceInicio + filasPorPagina);
 
+  // 🔁 Cambiar página
   const cambiarPagina = (nuevaPagina: number) => {
     if (nuevaPagina >= 1 && nuevaPagina <= totalPaginas) {
       setPaginaActual(nuevaPagina);
@@ -56,6 +59,7 @@ export default function AnalyticsDashboard() {
       <h1 className="text-2xl font-bold mb-4">Panel Analítico</h1>
       <p className="text-gray-600 mb-4">{status}</p>
 
+      {/* 🔘 Botones de navegación */}
       <div className="flex flex-wrap gap-3 mb-6">
         {[
           { id: "ventas", label: "Ventas por Día" },
@@ -77,6 +81,7 @@ export default function AnalyticsDashboard() {
         ))}
       </div>
 
+      {/* 📊 Tabla dinámica */}
       <div className="overflow-x-auto border rounded-lg">
         <table className="min-w-full border border-gray-300">
           <thead>
@@ -116,6 +121,7 @@ export default function AnalyticsDashboard() {
         </table>
       </div>
 
+      {/* 📑 Controles de paginación */}
       {datos.length > filasPorPagina && (
         <div className="flex justify-center items-center gap-4 mt-4">
           <button
@@ -143,7 +149,7 @@ export default function AnalyticsDashboard() {
                 : "bg-green-600 text-white hover:bg-green-700"
             }`}
           >
-            Siguiente &rarr;
+            Siguiente →
           </button>
         </div>
       )}

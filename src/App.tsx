@@ -23,6 +23,7 @@ const AnalyticsDashboard = lazy(() => import('./pages/AnalyticsDashboard'))
 const Checkout_Summary = lazy(() => import('./pages/Checkout_Summary'))
 
 
+
 export default function App() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/analitica" element={<AnalyticsDashboard />} />
         <Route path="*" element={<NotFound />} />
+        <Route path="/analitica" element={<AnalyticsDashboard />} />
       </Routes>
     </Suspense>
   )

@@ -16,6 +16,7 @@ export default function Home() {
 					<li><Link to="/doctors">Doctors</Link></li>
 					<li><Link to="/admin/users">Users Admin</Link></li>
 					<li><Link to="/admin/shop">Shop Admin</Link></li>
+					<li><Link to="/analitica">Analytics Dashboard</Link></li>
 				</ul>
 			</nav>
 		</div>

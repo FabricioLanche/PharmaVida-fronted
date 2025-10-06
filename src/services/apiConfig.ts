@@ -7,8 +7,14 @@ export const API = {
 }
 
 export async function apiGet<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' }, ...init })
-  if (!res.ok) throw new Error(`GET ${url} failed: ${res.status}`)
+  // Avoid forcing Content-Type on GET to reduce preflight/CORS issues
+  const res = await fetch(url, { method: 'GET', ...(init || {}) })
+  if (!res.ok) {
+    let detail = ''
+    try { detail = await res.text() } catch {}
+    const statusText = res.statusText || ''
+    throw new Error(`GET ${url} failed: ${res.status} ${statusText} ${detail ? '- ' + detail : ''}`)
+  }
   return res.json()
 }
 

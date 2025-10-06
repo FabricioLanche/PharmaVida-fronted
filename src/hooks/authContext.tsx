@@ -1,21 +1,18 @@
 import React, { createContext, useContext, useState, type ReactNode } from 'react';
 import { loginUser, registerUser, getUserMe } from '../services/usuarios_y_compras/usuariosAPI';
-import { type User } from '../types/usuarios'; // Import User type
+import { type User } from '../types/usuarios';
 
-// Define the AuthContext type
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (userData: { dni?: string; email?: string; password: string }) => Promise<void>;
   logout: () => void;
   register: (userData: { nombre: string; apellido: string; email: string; password: string; distrito: string; dni: string }) => Promise<void>;
-  error: string | null; // Add error state
+  error: string | null;
 }
 
-// Create the AuthContext
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Create the AuthProvider component
 interface AuthProviderProps {
   children: ReactNode;
 }
@@ -25,7 +22,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Function to handle user login
+  // Helper function to save user data
+  const saveUserData = (profile: User) => {
+    setUser(profile);
+    // Guardar DNI en localStorage para acceso rápido
+    if (profile.dni) {
+      localStorage.setItem('userDNI', String(profile.dni));
+    }
+    // Opcionalmente, guardar el objeto completo del usuario
+    localStorage.setItem('user', JSON.stringify(profile));
+  };
+
   const login = async (userData: { dni?: string; email?: string; password: string }) => {
     setIsLoading(true);
     setError(null);
@@ -35,7 +42,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('authToken', response.token);
       // Fetch profile using token
       const profile = await getUserMe(response.token);
-      setUser(profile);
+      // Save user data to state and localStorage
+      saveUserData(profile);
       setIsLoading(false);
     } catch (err: any) {
       console.error('Login error:', err);
@@ -44,14 +52,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // Function to handle user logout
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('authToken'); // Remove token on logout
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userDNI'); // Remove DNI on logout
+    localStorage.removeItem('user'); // Remove user object on logout
     setIsLoading(false);
   };
 
-  // Function to handle user registration
   const register = async (userData: { nombre: string; apellido: string; email: string; password: string; distrito: string; dni: string }) => {
     setIsLoading(true);
     setError(null);
@@ -59,7 +67,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await registerUser(userData);
       alert(response.message || 'Registro exitoso. Por favor, inicia sesión.');
       setIsLoading(false);
-      // The component calling register should handle navigation to login
     } catch (err: any) {
       console.error('Registration error:', err);
       setError(err.message || 'Error al registrarse.');
@@ -74,7 +81,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       (async () => {
         try {
           const profile = await getUserMe(token);
-          setUser(profile);
+          saveUserData(profile);
         } catch (e) {
           console.error('Failed to fetch profile', e);
           logout();
@@ -94,7 +101,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   );
 };
 
-// Custom hook to use the AuthContext
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {

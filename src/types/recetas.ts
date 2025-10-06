@@ -1,7 +1,7 @@
 export interface RecetaProducto {
-  id: number
-  nombre: string
-  cantidad: number
+  id: number;
+  nombre: string;
+  cantidad: number;
 }
 
 export interface Recetas {

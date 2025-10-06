@@ -19,7 +19,7 @@ const NavBar: React.FC = () => {
           <div className="flex items-center gap-3">
             {!user ? (
               <>
-                <Link to="/login" className="btn-orange px-3 py-1.5 text-sm">Login</Link>
+                <Link to="/login" className="px-3 py-1.5 text-sm" style={{ background: 'var(--pv-orange)', color: 'white', borderRadius: 12 }}>Login</Link>
                 <Link to="/register" className="px-3 py-1.5 text-sm" style={{ background: 'var(--pv-green)', color: 'white', borderRadius: 12 }}>Registro</Link>
               </>
             ) : (

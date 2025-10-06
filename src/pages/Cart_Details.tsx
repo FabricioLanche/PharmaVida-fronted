@@ -91,7 +91,7 @@ const Cart_Details: React.FC = () => {
         </button>
       )}
       <div className="mt-4">
-        <Link className="btn-orange inline-block px-4 py-2" to="/search">Volver al listado de productos</Link>
+        <Link className="inline-block px-4 py-2" style={{ background: 'var(--pv-orange)', color: 'white', borderRadius: 12 }}to="/search">Volver al listado de productos</Link>
       </div>
     </div>
   );

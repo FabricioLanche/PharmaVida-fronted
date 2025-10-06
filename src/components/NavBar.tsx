@@ -11,7 +11,9 @@ const NavBar: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link to="/" className="font-bold text-lg" style={{ color: 'var(--pv-green)' }}>PharmaVida</Link>
-            <Link to="/search" className="text-sm" style={{ color: 'var(--pv-orange)' }}>Productos</Link>
+            <Link to="/" className="text-sm" style={{ color: 'var(--pv-orange)' }}>Buscar</Link>
+            <Link to="/prescription" className="text-sm">Recetas</Link>
+            <Link to="/analitica" className="text-sm">Analítica</Link>
             <Link to="/cart" className="text-sm">Carrito</Link>
           </div>
           <div className="flex items-center gap-3">
